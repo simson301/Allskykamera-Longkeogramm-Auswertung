@@ -328,12 +328,12 @@ def analyse_longkeogram(
     x_min = x_num[0]
     x_max = x_num[-1]
 
-    fig, (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7) = plt.subplots(
-        8,
+    fig, (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9, ax10, ax11) = plt.subplots(
+        12,
         1,
-        figsize=(16, 20),
+        figsize=(16, 28),
         sharex=True,
-        gridspec_kw={"height_ratios": [2.5, 2.5, 2, 2, 2, 2, 2, 2]},
+        gridspec_kw={"height_ratios": [3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]},
     )
 
     ax0.imshow(
@@ -448,12 +448,48 @@ def analyse_longkeogram(
     ax7.set_title("Bereich: Himmel - Helligkeitsmittelwert pro vertikaler Linie")
     ax7.grid(True, alpha=0.3)
 
+    ax8.plot(timestamps, (rgb_float[:house_sky_border, :, 0]).sum(axis=0), label="Rot", color='r')
+    ax8.plot(timestamps, (rgb_float[:house_sky_border, :, 1]).sum(axis=0), label="Grün", color='g')
+    ax8.plot(timestamps, (rgb_float[:house_sky_border, :, 2]).sum(axis=0), label="Blau", color='b')
+    ax8.set_ylabel("Summe")
+    ax8.set_xlabel("Zeit")
+    ax8.set_title("Bereich: Hauswand - Farbsumme pro vertikaler Linie")
+    ax8.grid(True, alpha=0.3)
+    ax8.legend(loc="upper right")
+
+    ax9.plot(timestamps, (rgb_float[:house_sky_border, :, 0]).mean(axis=0), label="Rot", color='r')
+    ax9.plot(timestamps, (rgb_float[:house_sky_border, :, 1]).mean(axis=0), label="Grün", color='g')
+    ax9.plot(timestamps, (rgb_float[:house_sky_border, :, 2]).mean(axis=0), label="Blau", color='b')
+    ax9.set_ylabel("Mittelwert")
+    ax9.set_xlabel("Zeit")
+    ax9.set_title("Bereich: Hauswand - Farbmittelwert pro vertikaler Linie")
+    ax9.grid(True, alpha=0.3)
+    ax9.legend(loc="upper right")
+
+    ax10.plot(timestamps, (rgb_float[house_sky_border:, :, 0]).sum(axis=0), label="Rot", color='r')
+    ax10.plot(timestamps, (rgb_float[house_sky_border:, :, 1]).sum(axis=0), label="Grün", color='g')
+    ax10.plot(timestamps, (rgb_float[house_sky_border:, :, 2]).sum(axis=0), label="Blau", color='b')
+    ax10.set_ylabel("Summe")
+    ax10.set_xlabel("Zeit")
+    ax10.set_title("Bereich: Himmel - Farbsumme pro vertikaler Linie")
+    ax10.grid(True, alpha=0.3)
+    ax10.legend(loc="upper right")
+
+    ax11.plot(timestamps, (rgb_float[house_sky_border:, :, 0]).mean(axis=0), label="Rot", color='r')
+    ax11.plot(timestamps, (rgb_float[house_sky_border:, :, 1]).mean(axis=0), label="Grün", color='g')
+    ax11.plot(timestamps, (rgb_float[house_sky_border:, :, 2]).mean(axis=0), label="Blau", color='b')
+    ax11.set_ylabel("Mittelwert")
+    ax11.set_xlabel("Zeit")
+    ax11.set_title("Bereich: Himmel - Farbmittelwert pro vertikaler Linie")
+    ax11.grid(True, alpha=0.3)
+    ax11.legend(loc="upper right")
+
     for sunrise in sunrise_list:
-        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9, ax10, ax11):
             ax.axvline(sunrise, color="green", linestyle="--", linewidth=1, alpha=0.9)
 
     for sunset in sunset_list:
-        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9, ax10, ax11):
             ax.axvline(sunset, color="red", linestyle="--", linewidth=1, alpha=0.9)
 
     if sunrise_list or sunset_list:
@@ -463,7 +499,12 @@ def analyse_longkeogram(
             Line2D([0], [0], color="green", linestyle="--", label="Sonnenaufgang"),
             Line2D([0], [0], color="red", linestyle="--", label="Sonnenuntergang"),
         ]
-        ax1.legend(handles=legend_elements, loc="upper right")
+        ax2.legend(handles=legend_elements, loc="upper right")
+        ax3.legend(handles=legend_elements, loc="upper right")
+        ax4.legend(handles=legend_elements, loc="upper right")
+        ax5.legend(handles=legend_elements, loc="upper right")
+        ax6.legend(handles=legend_elements, loc="upper right")
+        ax7.legend(handles=legend_elements, loc="upper right")
 
     locator = mdates.AutoDateLocator()
     formatter = mdates.ConciseDateFormatter(locator)

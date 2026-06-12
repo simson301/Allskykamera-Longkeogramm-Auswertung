@@ -41,7 +41,7 @@ try:
 except ImportError:
     ZoneInfo = None
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -229,6 +229,7 @@ def analyse_longkeogram(
     timezone_name="Europe/Berlin",
     output_prefix=None,
     expected_mode="auto",
+    house_sky_border=120,
 ):
     image_path = Path(image_path)
 
@@ -244,19 +245,44 @@ def analyse_longkeogram(
     start_time = parse_start_time(start)
 
     img = Image.open(image_path).convert("RGB")
+
+    width, height = img.size
+
+    draw_img = img.convert("RGBA")
+    # Transparente Overlay-Ebene erstellen
+    overlay = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    draw.rectangle(
+        [(0, 0), (width, house_sky_border)],
+        fill=(255, 0, 0, 80)  # Rot mit leichter Transparenz
+    )
+    draw.rectangle(
+        [(0, house_sky_border), (width, height)],
+        fill=(0, 255, 0, 80)  # Rot mit leichter Transparenz
+    )
+    draw_img = Image.alpha_composite(draw_img, overlay)
+
     rgb_display = np.asarray(img, dtype=np.uint8)
     rgb_float = rgb_display.astype(np.float32)
 
-    luminance = (
-        0.2126 * rgb_float[:, :, 0]
-        + 0.7152 * rgb_float[:, :, 1]
-        + 0.0722 * rgb_float[:, :, 2]
+    luminance_house = (
+        0.2126 * rgb_float[:house_sky_border, :, 0]
+        + 0.7152 * rgb_float[:house_sky_border, :, 1]
+        + 0.0722 * rgb_float[:house_sky_border, :, 2]
+    )
+    luminance_sky = (
+        0.2126 * rgb_float[house_sky_border:, :, 0]
+        + 0.7152 * rgb_float[house_sky_border:, :, 1]
+        + 0.0722 * rgb_float[house_sky_border:, :, 2]
     )
 
-    height, width = luminance.shape
+    house_sum = luminance_house.sum(axis=0)
+    house_mean = luminance_house.mean(axis=0)
+    sky_sum = luminance_sky.sum(axis=0)
+    sky_mean = luminance_sky.mean(axis=0)
 
-    brightness_sum = luminance.sum(axis=0)
-    brightness_mean = luminance.mean(axis=0)
+    brightness_sum = house_sum + sky_sum
+    brightness_mean = house_mean + sky_mean
 
     timestamps = [
         start_time + timedelta(minutes=i * interval_minutes)
@@ -302,12 +328,12 @@ def analyse_longkeogram(
     x_min = x_num[0]
     x_max = x_num[-1]
 
-    fig, (ax0, ax1, ax2) = plt.subplots(
-        3,
+    fig, (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7) = plt.subplots(
+        8,
         1,
-        figsize=(16, 10.7),
+        figsize=(16, 20),
         sharex=True,
-        gridspec_kw={"height_ratios": [2.5, 1.2, 1.2]},
+        gridspec_kw={"height_ratios": [2.5, 2.5, 2, 2, 2, 2, 2, 2]},
     )
 
     ax0.imshow(
@@ -368,23 +394,66 @@ def analyse_longkeogram(
         bbox=dict(facecolor="white", alpha=0.85, edgecolor="gray"),
     )
 
-    ax1.plot(timestamps, brightness_sum, label="Helligkeit Summe")
-    ax1.set_ylabel("Summe")
-    ax1.set_title("Helligkeitssumme pro vertikaler Linie")
-    ax1.grid(True, alpha=0.3)
+    ax1.imshow(
+        draw_img,
+        aspect="auto",
+        extent=[x_min, x_max, height, 0],
+        interpolation="nearest",
+    )
+    ax1.set_ylabel("Pixelhöhe")
+    ax1.set_title("LongKeogram Bereiche")
 
-    ax2.plot(timestamps, brightness_mean, label="Helligkeit Mittelwert")
-    ax2.set_ylabel("Mittelwert")
-    ax2.set_xlabel("Zeit")
-    ax2.set_title("Helligkeitsmittelwert pro vertikaler Linie")
+    info_text = "Bereich mit Hauswand: Rot\nBereich ohne Hauswand mit Himmel: Grün"
+    ax1.text(
+        0.01,
+        0.98,
+        info_text,
+        transform=ax1.transAxes,
+        va="top",
+        ha="left",
+        fontsize=9,
+        bbox=dict(facecolor="white", alpha=0.85, edgecolor="gray"),
+    )
+
+    ax2.plot(timestamps, brightness_sum, label="Keogramm: Helligkeit Summe")
+    ax2.set_ylabel("Summe")
+    ax2.set_title("Bereich: ganzes Keogramm - Helligkeitssumme pro vertikaler Linie")
     ax2.grid(True, alpha=0.3)
 
+    ax3.plot(timestamps, brightness_mean, label="Keogramm: Helligkeit Mittelwert")
+    ax3.set_ylabel("Mittelwert")
+    ax3.set_xlabel("Zeit")
+    ax3.set_title("Bereich: ganzes Keogramm - Helligkeitsmittelwert pro vertikaler Linie")
+    ax3.grid(True, alpha=0.3)
+
+    ax4.plot(timestamps, house_sum, label="Hauswand: Helligkeit Summe")
+    ax4.set_ylabel("Summe")
+    ax4.set_title("Bereich: Hauswand - Helligkeitssumme pro vertikaler Linie")
+    ax4.grid(True, alpha=0.3)
+
+    ax5.plot(timestamps, house_mean, label="Hauswand: Helligkeit Mittelwert")
+    ax5.set_ylabel("Mittelwert")
+    ax5.set_xlabel("Zeit")
+    ax5.set_title("Bereich: Hauswand - Helligkeitsmittelwert pro vertikaler Linie")
+    ax5.grid(True, alpha=0.3)
+
+    ax6.plot(timestamps, sky_sum, label="Himmel: Helligkeit Summe")
+    ax6.set_ylabel("Summe")
+    ax6.set_title("Bereich: Himmel - Helligkeitssumme pro vertikaler Linie")
+    ax6.grid(True, alpha=0.3)
+
+    ax7.plot(timestamps, sky_mean, label="Himmel: Helligkeit Mittelwert")
+    ax7.set_ylabel("Mittelwert")
+    ax7.set_xlabel("Zeit")
+    ax7.set_title("Bereich: Himmel - Helligkeitsmittelwert pro vertikaler Linie")
+    ax7.grid(True, alpha=0.3)
+
     for sunrise in sunrise_list:
-        for ax in (ax0, ax1, ax2):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7):
             ax.axvline(sunrise, color="green", linestyle="--", linewidth=1, alpha=0.9)
 
     for sunset in sunset_list:
-        for ax in (ax0, ax1, ax2):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7):
             ax.axvline(sunset, color="red", linestyle="--", linewidth=1, alpha=0.9)
 
     if sunrise_list or sunset_list:
@@ -399,11 +468,11 @@ def analyse_longkeogram(
     locator = mdates.AutoDateLocator()
     formatter = mdates.ConciseDateFormatter(locator)
 
-    for ax in (ax0, ax1, ax2):
+    for ax in (ax0, ax1, ax2, ax3, ax4, ax5, ax6, ax7):
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_major_formatter(formatter)
 
-    plt.suptitle("LongKeogram-Auswertung", fontsize=14)
+    plt.suptitle("LongKeogram-Auswertung", fontsize=14, y=0.99)
     plt.tight_layout()
     plt.savefig(output_plot, dpi=160)
     plt.close(fig)

@@ -41,7 +41,7 @@ try:
 except ImportError:
     ZoneInfo = None
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -236,28 +236,13 @@ def analyse_longkeogram(
     if not image_path.exists():
         raise FileNotFoundError("Datei nicht gefunden: {}".format(image_path))
 
-    if output_prefix is None:
-        output_prefix = image_path.stem + "_helligkeit"
-
-    output_csv = image_path.with_name(output_prefix + ".csv")
-    output_plot = image_path.with_name(output_prefix + ".png")
-
     start_time = parse_start_time(start)
 
     img = Image.open(image_path).convert("RGB")
     rgb_display = np.asarray(img, dtype=np.uint8)
     rgb_float = rgb_display.astype(np.float32)
 
-    luminance = (
-        0.2126 * rgb_float[:, :, 0]
-        + 0.7152 * rgb_float[:, :, 1]
-        + 0.0722 * rgb_float[:, :, 2]
-    )
-
-    height, width = luminance.shape
-
-    brightness_sum = luminance.sum(axis=0)
-    brightness_mean = luminance.mean(axis=0)
+    width, height = img.size
 
     timestamps = [
         start_time + timedelta(minutes=i * interval_minutes)
@@ -285,18 +270,111 @@ def analyse_longkeogram(
             timezone_name=timezone_name,
         )
 
+    plot_long_keogram_analasys(
+        y0=0,
+        y1=height,
+        img=img,
+        overlay=False,
+        rgb_float=rgb_float,
+        img_path=image_path,
+        output_prefix=output_prefix,
+        timestamps=timestamps,
+        interval_minutes=interval_minutes,
+        line_stats=line_stats,
+        latitude=latitude,
+        longitude=longitude,
+        timezone_name=timezone_name,
+        sunrise_list=sunrise_list,
+        sunset_list=sunset_list,
+    )
+
+    for region in regions:
+        plot_long_keogram_analasys(
+            y0=region[0],
+            y1=region[1],
+            img=img,
+            overlay=True,
+            rgb_float=rgb_float,
+            img_path=image_path,
+            output_prefix=output_prefix,
+            timestamps=timestamps,
+            interval_minutes=interval_minutes,
+            line_stats=line_stats,
+            latitude=latitude,
+            longitude=longitude,
+            timezone_name=timezone_name,
+            sunrise_list=sunrise_list,
+            sunset_list=sunset_list,
+        )
+
+def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list):
+    image_path = Path(img_path)
+
+    if not image_path.exists():
+        raise FileNotFoundError("Datei nicht gefunden: {}".format(image_path))
+
+    if output_prefix is None:
+        output_prefix = image_path.stem + "_helligkeit"
+
+    output_csv = image_path.with_name(f"{output_prefix}_{y0}-{y1}.csv")
+    output_plot = image_path.with_name(f"{output_prefix}_{y0}-{y1}.png")
+
+    width, height = img.size
+
+    luminance = (
+        0.2126 * rgb_float[y0:y1, :, 0]
+        + 0.7152 * rgb_float[y0:y1, :, 1]
+        + 0.0722 * rgb_float[y0:y1, :, 2]
+    )
+
+    brightness_sum = luminance.sum(axis=0)
+    brightness_mean = luminance.mean(axis=0)
+    
+    r_sum = (rgb_float[y0:y1, :, 0]).sum(axis=0)
+    g_sum = (rgb_float[y0:y1, :, 1]).sum(axis=0)
+    b_sum = (rgb_float[y0:y1, :, 2]).sum(axis=0)
+
+    r_mean = (rgb_float[y0:y1, :, 0]).mean(axis=0)
+    g_mean = (rgb_float[y0:y1, :, 1]).mean(axis=0)
+    b_mean = (rgb_float[y0:y1, :, 2]).mean(axis=0)
+
+    draw_img = img.convert("RGBA")
+    # Transparente Overlay-Ebene erstellen
+    if overlay:
+        overlay = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        draw.rectangle(
+            [(0, y0), (width, y1)],
+            fill=(255, 0, 0, 80)  # Rot mit leichter Transparenz
+        )
+
+        draw_img = Image.alpha_composite(draw_img, overlay)
+
+
     with output_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "timestamp",
             "brightness_sum",
             "brightness_mean",
+            "r_sum",
+            "g_sum",
+            "b_sum",
+            "r_mean",
+            "g_mean",
+            "b_mean",
         ])
-        for ts, bsum, bmean in zip(timestamps, brightness_sum, brightness_mean):
+        for ts, bsum, bmean, r_s, g_s, b_s, r_m, g_m, b_m in zip(timestamps, brightness_sum, brightness_mean, r_sum, g_sum, b_sum, r_mean, g_mean, b_mean):
             writer.writerow([
                 ts.isoformat(sep=" "),
                 float(bsum),
                 float(bmean),
+                float(r_s),
+                float(g_s),
+                float(b_s),
+                float(r_m),  
+                float(g_m),
+                float(b_m),
             ])
 
     x_num = mdates.date2num(timestamps)
@@ -312,7 +390,7 @@ def analyse_longkeogram(
     )
 
     ax0.imshow(
-        rgb_display,
+        draw_img,
         aspect="auto",
         extent=[x_min, x_max, height, 0],
         interpolation="nearest",
@@ -380,18 +458,18 @@ def analyse_longkeogram(
     ax2.set_title("Helligkeitsmittelwert pro vertikaler Linie")
     ax2.grid(True, alpha=0.3)
 
-    ax3.plot(timestamps, (rgb_float[:, :, 0]).sum(axis=0), label="Rot", color='r')
-    ax3.plot(timestamps, (rgb_float[:, :, 1]).sum(axis=0), label="Grün", color='g')
-    ax3.plot(timestamps, (rgb_float[:, :, 2]).sum(axis=0), label="Blau", color='b')
+    ax3.plot(timestamps, r_sum, label="Rot", color='r')
+    ax3.plot(timestamps, g_sum, label="Grün", color='g')
+    ax3.plot(timestamps, b_sum, label="Blau", color='b')
     ax3.set_ylabel("Summe")
     ax3.set_xlabel("Zeit")
     ax3.set_title("Bereich: Hauswand - Farbsumme pro vertikaler Linie")
     ax3.grid(True, alpha=0.3)
     ax3.legend(loc="upper right")
 
-    ax4.plot(timestamps, (rgb_float[:, :, 0]).mean(axis=0), label="Rot", color='r')
-    ax4.plot(timestamps, (rgb_float[:, :, 1]).mean(axis=0), label="Grün", color='g')
-    ax4.plot(timestamps, (rgb_float[:, :, 2]).mean(axis=0), label="Blau", color='b')
+    ax4.plot(timestamps, r_mean, label="Rot", color='r')
+    ax4.plot(timestamps, g_mean, label="Grün", color='g')
+    ax4.plot(timestamps, b_mean, label="Blau", color='b')
     ax4.set_ylabel("Mittelwert")
     ax4.set_xlabel("Zeit")
     ax4.set_title("Bereich: Hauswand - Farbmittelwert pro vertikaler Linie")
@@ -486,7 +564,15 @@ def main():
         help="auto: aktueller Monat nur bis jetzt, alte Monate komplett; full-month: kompletter Monat; until-end: bis zur letzten Bildlinie",
     )
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
-
+    parser.add_argument(
+    "--region",
+    nargs=2,
+    type=int,
+    action="append",
+    metavar=("X", "Y"),
+    default=[],
+    help="Analyse der Daten nur in der angegebenen Y-Region",
+    )
     args = parser.parse_args()
 
     analyse_longkeogram(
@@ -498,6 +584,7 @@ def main():
         timezone_name=args.timezone,
         output_prefix=args.output_prefix,
         expected_mode=args.expected_mode,
+        regions = args.region,
     )
 
 

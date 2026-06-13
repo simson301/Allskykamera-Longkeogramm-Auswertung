@@ -222,7 +222,7 @@ def calc_month_line_stats(start_time, interval_minutes, actual_width, timezone_n
 
 def analyse_longkeogram(
     image_path,
-    start="2026-06-01 00:00:00",
+    start="2026-05-01 00:00:00",
     interval_minutes=10,
     latitude=None,
     longitude=None,

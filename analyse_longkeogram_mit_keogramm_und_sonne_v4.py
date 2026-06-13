@@ -223,6 +223,7 @@ def calc_month_line_stats(start_time, interval_minutes, actual_width, timezone_n
 def analyse_longkeogram(
     image_path,
     start="2026-05-01 00:00:00",
+    output_dir="Output/",
     interval_minutes=10,
     latitude=None,
     longitude=None,
@@ -239,8 +240,14 @@ def analyse_longkeogram(
     if output_prefix is None:
         output_prefix = image_path.stem + "_helligkeit"
 
-    output_csv = image_path.with_name(output_prefix + ".csv")
-    output_plot = image_path.with_name(output_prefix + ".png")
+    output_csv = image_path.with_name(f"{output_prefix}.csv")
+    output_plot = image_path.with_name(f"{output_prefix}.png")
+
+    output_csv = Path(*output_csv.parts[:-1], output_dir, output_csv.name)
+    output_plot = Path(*output_plot.parts[:-1], output_dir, output_plot.name)
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    output_plot.parent.mkdir(parents=True, exist_ok=True)
 
     start_time = parse_start_time(start)
 
@@ -577,12 +584,13 @@ def main():
         help="auto: aktueller Monat nur bis jetzt, alte Monate komplett; full-month: kompletter Monat; until-end: bis zur letzten Bildlinie",
     )
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
-
+    parser.add_argument("--output-dir", default="Output/", help="Outputverzeichnis, Default: Output/")
     args = parser.parse_args()
 
     analyse_longkeogram(
         image_path=args.image,
         start=args.start,
+        output_dir=args.output_dir,
         interval_minutes=args.interval,
         latitude=args.lat,
         longitude=args.lon,

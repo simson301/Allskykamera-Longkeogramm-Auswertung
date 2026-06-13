@@ -232,7 +232,7 @@ def analyse_longkeogram(
     timezone_name="Europe/Berlin",
     output_prefix=None,
     expected_mode="auto",
-    regions = [],
+    sections = [],
 ):
     image_path = Path(image_path)
 
@@ -299,9 +299,9 @@ def analyse_longkeogram(
         sunset_list=sunset_list,
     )
 
-    for region in regions:
-        y0 = region[0]
-        y1 = region[1]
+    for section in sections:
+        y0 = section[0]
+        y1 = section[1]
         if y1 > height:
             y1 = height
         elif y1 <= 0:
@@ -593,13 +593,13 @@ def main():
     )
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
     parser.add_argument(
-    "--region",
+    "--section",
     nargs=2,
     type=int,
     action="append",
     metavar=("X", "Y"),
     default=[],
-    help="Analyse der Daten nur in der angegebenen Y-Region",
+    help="Analyse der Daten nur in der angegebenen Y-section",
     )
     parser.add_argument("--start", default="2026-05-21 00:00:00", help="Startzeitpunkt des untersuchten Intervalls, Default: 2026-05-01 00:00:00")
     parser.add_argument("--end", default="2026-05-29 00:00:00", help="Endzeitpunkt des untersuchten Intervalls, Default: 2026-05-29 00:00:00")
@@ -616,7 +616,7 @@ def main():
         timezone_name=args.timezone,
         output_prefix=args.output_prefix,
         expected_mode=args.expected_mode,
-        regions = args.region,
+        sections = args.section,
     )
 
 

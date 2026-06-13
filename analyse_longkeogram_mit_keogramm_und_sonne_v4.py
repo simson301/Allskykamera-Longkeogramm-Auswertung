@@ -51,6 +51,7 @@ from astral.sun import sun
 
 
 def parse_start_time(value):
+    print(value)
     formats = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M",
@@ -222,7 +223,9 @@ def calc_month_line_stats(start_time, interval_minutes, actual_width, timezone_n
 
 def analyse_longkeogram(
     image_path,
-    start="2026-06-01 00:00:00",
+    start,
+    end,
+    absolute_start="2026-06-01 00:00:00",
     interval_minutes=10,
     latitude=None,
     longitude=None,
@@ -236,20 +239,28 @@ def analyse_longkeogram(
     if not image_path.exists():
         raise FileNotFoundError("Datei nicht gefunden: {}".format(image_path))
 
+    absolute_start_time = parse_start_time(absolute_start)
     start_time = parse_start_time(start)
+    end_time = parse_start_time(end)
+
+    start_row = int((start_time - absolute_start_time).total_seconds() // 60) // interval_minutes
+    end_row = int((end_time - absolute_start_time).total_seconds() // 60) // interval_minutes
+    
 
     img = Image.open(image_path).convert("RGB")
+    width, height = img.size
+    img = img.crop((start_row, 0, end_row, height))
+    width, height = img.size
     rgb_display = np.asarray(img, dtype=np.uint8)
     rgb_float = rgb_display.astype(np.float32)
 
-    width, height = img.size
-
+    
     timestamps = [
         start_time + timedelta(minutes=i * interval_minutes)
         for i in range(width)
     ]
 
-    end_time = timestamps[-1]
+    #end_time = timestamps[-1]
 
     line_stats = calc_month_line_stats(
         start_time=start_time,
@@ -289,9 +300,24 @@ def analyse_longkeogram(
     )
 
     for region in regions:
+        y0 = region[0]
+        y1 = region[1]
+        if y1 > height:
+            y1 = height
+        elif y1 <= 0:
+            y1 = height
+        elif y1 == -1:
+            y1 = height
+        if y0 > height:
+            y0 = 0
+        elif y0 < 0:
+            y0 = 0
+        if y0 > y1:
+            y0, y1 = y1, y0
+        
         plot_long_keogram_analasys(
-            y0=region[0],
-            y1=region[1],
+            y0=y0,
+            y1=y1,
             img=img,
             overlay=True,
             rgb_float=rgb_float,
@@ -309,6 +335,8 @@ def analyse_longkeogram(
 
 def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list):
     image_path = Path(img_path)
+
+    print(y0, y1)
 
     if not image_path.exists():
         raise FileNotFoundError("Datei nicht gefunden: {}".format(image_path))
@@ -357,12 +385,12 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
             "timestamp",
             "brightness_sum",
             "brightness_mean",
-            "r_sum",
-            "g_sum",
-            "b_sum",
-            "r_mean",
-            "g_mean",
-            "b_mean",
+            "red_sum",
+            "green_sum",
+            "blue_sum",
+            "red_mean",
+            "green_mean",
+            "blue_mean",
         ])
         for ts, bsum, bmean, r_s, g_s, b_s, r_m, g_m, b_m in zip(timestamps, brightness_sum, brightness_mean, r_sum, g_sum, b_sum, r_mean, g_mean, b_mean):
             writer.writerow([
@@ -552,7 +580,7 @@ def main():
         description="Berechnet Summe und Mittelwert der Helligkeit pro vertikaler Linie eines LongKeogramms und zeigt das Keogramm darüber an."
     )
     parser.add_argument("image", help="Pfad zum LongKeogramm, z. B. LongKeogram_202606.jpg")
-    parser.add_argument("--start", default="2026-06-01 00:00:00", help="Startzeit, Default: 2026-06-01 00:00:00")
+    parser.add_argument("--absolute-start", default="2026-06-01 00:00:00", help="Startzeit des Keogramms, Default: 2026-05-01 00:00:00")
     parser.add_argument("--interval", type=int, default=10, help="Intervall pro vertikaler Linie in Minuten, Default: 10")
     parser.add_argument("--lat", type=float, default=None, help="Breitengrad des Kamerastandorts")
     parser.add_argument("--lon", type=float, default=None, help="Längengrad des Kamerastandorts")
@@ -573,11 +601,15 @@ def main():
     default=[],
     help="Analyse der Daten nur in der angegebenen Y-Region",
     )
+    parser.add_argument("--start", default="2026-05-21 00:00:00", help="Startzeitpunkt des untersuchten Intervalls, Default: 2026-05-01 00:00:00")
+    parser.add_argument("--end", default="2026-05-29 00:00:00", help="Endzeitpunkt des untersuchten Intervalls, Default: 2026-05-29 00:00:00")
     args = parser.parse_args()
 
     analyse_longkeogram(
         image_path=args.image,
         start=args.start,
+        end=args.end,
+        absolute_start=args.absolute_start,
         interval_minutes=args.interval,
         latitude=args.lat,
         longitude=args.lon,

@@ -229,6 +229,7 @@ def analyse_longkeogram(
     timezone_name="Europe/Berlin",
     output_prefix=None,
     expected_mode="auto",
+    regions = [],
 ):
     image_path = Path(image_path)
 
@@ -302,12 +303,12 @@ def analyse_longkeogram(
     x_min = x_num[0]
     x_max = x_num[-1]
 
-    fig, (ax0, ax1, ax2) = plt.subplots(
-        3,
+    fig, (ax0, ax1, ax2, ax3, ax4) = plt.subplots(
+        5,
         1,
-        figsize=(16, 10.7),
+        figsize=(16, 12),
         sharex=True,
-        gridspec_kw={"height_ratios": [2.5, 1.2, 1.2]},
+        gridspec_kw={"height_ratios": [3, 2, 2, 2, 2]},
     )
 
     ax0.imshow(
@@ -379,12 +380,30 @@ def analyse_longkeogram(
     ax2.set_title("Helligkeitsmittelwert pro vertikaler Linie")
     ax2.grid(True, alpha=0.3)
 
+    ax3.plot(timestamps, (rgb_float[:, :, 0]).sum(axis=0), label="Rot", color='r')
+    ax3.plot(timestamps, (rgb_float[:, :, 1]).sum(axis=0), label="Grün", color='g')
+    ax3.plot(timestamps, (rgb_float[:, :, 2]).sum(axis=0), label="Blau", color='b')
+    ax3.set_ylabel("Summe")
+    ax3.set_xlabel("Zeit")
+    ax3.set_title("Bereich: Hauswand - Farbsumme pro vertikaler Linie")
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(loc="upper right")
+
+    ax4.plot(timestamps, (rgb_float[:, :, 0]).mean(axis=0), label="Rot", color='r')
+    ax4.plot(timestamps, (rgb_float[:, :, 1]).mean(axis=0), label="Grün", color='g')
+    ax4.plot(timestamps, (rgb_float[:, :, 2]).mean(axis=0), label="Blau", color='b')
+    ax4.set_ylabel("Mittelwert")
+    ax4.set_xlabel("Zeit")
+    ax4.set_title("Bereich: Hauswand - Farbmittelwert pro vertikaler Linie")
+    ax4.grid(True, alpha=0.3)
+    ax4.legend(loc="upper right")
+
     for sunrise in sunrise_list:
-        for ax in (ax0, ax1, ax2):
+        for ax in (ax0, ax1, ax2, ax3, ax4):
             ax.axvline(sunrise, color="green", linestyle="--", linewidth=1, alpha=0.9)
 
     for sunset in sunset_list:
-        for ax in (ax0, ax1, ax2):
+        for ax in (ax0, ax1, ax2, ax3, ax4):
             ax.axvline(sunset, color="red", linestyle="--", linewidth=1, alpha=0.9)
 
     if sunrise_list or sunset_list:

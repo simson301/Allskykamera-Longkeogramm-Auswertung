@@ -225,6 +225,7 @@ def analyse_longkeogram(
     image_path,
     start,
     end,
+    output_dir,
     absolute_start="2026-06-01 00:00:00",
     interval_minutes=10,
     latitude=None,
@@ -288,6 +289,7 @@ def analyse_longkeogram(
         overlay=False,
         rgb_float=rgb_float,
         img_path=image_path,
+        output_dir=output_dir,
         output_prefix=output_prefix,
         timestamps=timestamps,
         interval_minutes=interval_minutes,
@@ -322,6 +324,7 @@ def analyse_longkeogram(
             overlay=True,
             rgb_float=rgb_float,
             img_path=image_path,
+            output_dir=output_dir,
             output_prefix=output_prefix,
             timestamps=timestamps,
             interval_minutes=interval_minutes,
@@ -333,7 +336,7 @@ def analyse_longkeogram(
             sunset_list=sunset_list,
         )
 
-def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list):
+def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list):
     image_path = Path(img_path)
 
     print(y0, y1)
@@ -347,8 +350,15 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     output_csv = image_path.with_name(f"{output_prefix}_{y0}-{y1}.csv")
     output_plot = image_path.with_name(f"{output_prefix}_{y0}-{y1}.png")
 
-    width, height = img.size
+    output_csv = Path(*output_csv.parts[:-1], output_dir, output_csv.name)
+    output_plot = Path(*output_plot.parts[:-1], output_dir, output_plot.name)
 
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    output_plot.parent.mkdir(parents=True, exist_ok=True)
+    
+    width, height = img.size
+    
     luminance = (
         0.2126 * rgb_float[y0:y1, :, 0]
         + 0.7152 * rgb_float[y0:y1, :, 1]
@@ -592,6 +602,7 @@ def main():
         help="auto: aktueller Monat nur bis jetzt, alte Monate komplett; full-month: kompletter Monat; until-end: bis zur letzten Bildlinie",
     )
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
+    parser.add_argument("--output-dir", default="Output_Selectable_Sections/", help="Output-Verzeichnis, Default: Output_Selectable_Sections/")
     parser.add_argument(
     "--section",
     nargs=2,
@@ -609,6 +620,7 @@ def main():
         image_path=args.image,
         start=args.start,
         end=args.end,
+        output_dir=args.output_dir,
         absolute_start=args.absolute_start,
         interval_minutes=args.interval,
         latitude=args.lat,

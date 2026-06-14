@@ -218,10 +218,94 @@ def calc_month_line_stats(start_time, interval_minutes, actual_width, timezone_n
         "expected_reason": expected_reason,
         "expected_mode": expected_mode,
     }
+import json
 
+
+def find_gaps(jsonl_path, interval_minutes=10):
+    """
+    Returns a list of dictionaries describing gaps.
+
+    Each dictionary contains:
+        - start_index: Index where the first missing entry should be inserted.
+        - missing_count: Number of missing intervals.
+    """
+    interval = timedelta(minutes=interval_minutes)
+    gaps = []
+
+    previous_time = None
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for index, line in enumerate(f):
+            data = json.loads(line)
+            current_time = datetime.fromisoformat(
+                data["slot"].replace("Z", "+00:00")
+            )
+
+            if previous_time is not None:
+                gap = current_time - previous_time
+                missing_count = int(gap // interval) - 1
+
+                if missing_count > 0:
+                    gaps.append({
+                        "start_index": index,
+                        "missing_count": missing_count,
+                    })
+
+            previous_time = current_time
+
+    return gaps
+
+
+def insert_black_columns(img: Image.Image, gaps) -> Image.Image:
+    """
+    Insert black columns into a PIL Image.
+
+    Parameters
+    ----------
+    img : PIL.Image.Image
+        Input image.
+    gaps : list of dict
+        Each dict should have:
+            - "start_index": column before which to insert
+            - "missing_count": number of black columns to insert
+
+    Returns
+    -------
+    PIL.Image.Image
+        New image with black columns inserted.
+    """
+    arr = np.asarray(img)
+    height, width, channels = arr.shape
+
+    total_missing = sum(gap["missing_count"] for gap in gaps)
+    new_width = width + total_missing
+
+    # New image initialized to black
+    result = np.zeros((height, new_width, channels), dtype=arr.dtype)
+
+    src_col = 0
+    dst_col = 0
+
+    gaps = sorted(gaps, key=lambda g: g["start_index"])
+    gap_idx = 0
+
+    while src_col < width:
+        if (
+            gap_idx < len(gaps)
+            and src_col == gaps[gap_idx]["start_index"]
+        ):
+            dst_col += gaps[gap_idx]["missing_count"]
+            gap_idx += 1
+
+        result[:, dst_col, :] = arr[:, src_col, :]
+        src_col += 1
+        dst_col += 1
+
+    return Image.fromarray(result)
 
 def analyse_longkeogram(
     image_path,
+    meta_path,
     start="2026-05-01 00:00:00",
     output_dir="Output/",
     interval_minutes=10,
@@ -252,6 +336,7 @@ def analyse_longkeogram(
     start_time = parse_start_time(start)
 
     img = Image.open(image_path).convert("RGB")
+    img = insert_black_columns(img, find_gaps(meta_path, interval_minutes))
 
     width, height = img.size
 
@@ -585,10 +670,12 @@ def main():
     )
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
     parser.add_argument("--output-dir", default="Output/", help="Outputverzeichnis, Default: Output/")
+    parser.add_argument("--meta", default="meta.jsonl", help="Metadata, for retrieving missing Lines")
     args = parser.parse_args()
 
     analyse_longkeogram(
         image_path=args.image,
+        meta_path=args.meta,
         start=args.start,
         output_dir=args.output_dir,
         interval_minutes=args.interval,

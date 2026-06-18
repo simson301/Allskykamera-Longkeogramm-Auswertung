@@ -43,6 +43,7 @@ except ImportError:
 
 from PIL import Image, ImageDraw
 import numpy as np
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -306,6 +307,61 @@ def insert_black_columns(img: Image.Image, gaps) -> Image.Image:
 
     return Image.fromarray(result)
 
+def evaluate_datalines(brightness_sums):
+    return (brightness_sums > 0).astype(int)
+
+def adjacent_distances_same_length(arr):
+    return np.append(np.abs(np.diff(arr)), 0)
+
+def regulated_distances(values, replacement=1.0):
+    values = np.asarray(values)
+    distances = np.abs(np.diff(values))
+
+    invalid = (values[:-1] == 0) | (values[1:] == 0)
+    distances[invalid] = replacement
+
+    return distances
+
+def average_adjacent_distance_per_interval(values, timestamps, interval):
+    """
+    Berechnet den durchschnittlichen Abstand |x[i+1] - x[i]|
+    pro Zeitintervall.
+
+    Parameters
+    ----------
+    values : array-like
+        Messwerte.
+    timestamps : list[datetime]
+        Zeitstempel gleicher Länge wie `values`.
+    interval : timedelta
+        Z.B. timedelta(hours=1)
+
+    Returns
+    -------
+    interval_starts : list[datetime]
+        Beginn jedes Intervalls.
+    averages : list[float]
+        Durchschnittlicher Abstand in diesem Intervall.
+    """
+    
+    distances = regulated_distances(values)
+
+    start = timestamps[0]
+    groups = defaultdict(list)
+
+    for dist, ts in zip(distances, timestamps[:-1]):
+        bucket = (ts - start) // interval
+        bucket_start = start + bucket * interval
+        groups[bucket_start].append(dist)
+
+    interval_starts = sorted(groups.keys())
+    averages = [
+        float(np.mean(groups[bucket_start]))
+        for bucket_start in interval_starts
+    ]
+
+    return interval_starts, averages
+
 def analyse_longkeogram(
     image_path,
     meta_path,
@@ -508,12 +564,12 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     x_min = x_num[0]
     x_max = x_num[-1]
 
-    fig, (ax0, ax1, ax2, ax3, ax4) = plt.subplots(
-        5,
+    fig, (ax0, ax1, ax2, ax3, ax4, ax5) = plt.subplots(
+        6,
         1,
         figsize=(16, 12),
         sharex=True,
-        gridspec_kw={"height_ratios": [3, 2, 2, 2, 2]},
+        gridspec_kw={"height_ratios": [3, 2, 2, 2, 2, 2]},
     )
 
     ax0.imshow(
@@ -603,12 +659,26 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     ax4.grid(True, alpha=0.3)
     ax4.legend(loc="upper right")
 
+    """
+    ax5.plot(timestamps, adjacent_distances_same_length(brightness_sum), label="Nachbarabstand")
+    ax5.set_ylabel("Abstand")
+    ax5.set_xlabel("Zeit")
+    ax5.set_title("Helligkeitssumen Nachbarabstand pro vertikaler Linie")
+    ax5.grid(True, alpha=0.3)
+    """
+    time, average_distances = average_adjacent_distance_per_interval(brightness_sum, timestamps, timedelta(days=1))
+    ax5.plot(time, average_distances, label="Nachbarabstand")
+    ax5.set_ylabel("Abstand")
+    ax5.set_xlabel("Zeit")
+    ax5.set_title("Helligkeitssumen Nachbarabstand pro vertikaler Linie")
+    ax5.grid(True, alpha=0.3)
+
     for sunrise in sunrise_list:
-        for ax in (ax0, ax1, ax2, ax3, ax4):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5):
             ax.axvline(sunrise, color="green", linestyle="--", linewidth=1, alpha=0.9)
 
     for sunset in sunset_list:
-        for ax in (ax0, ax1, ax2, ax3, ax4):
+        for ax in (ax0, ax1, ax2, ax3, ax4, ax5):
             ax.axvline(sunset, color="red", linestyle="--", linewidth=1, alpha=0.9)
 
     if sunrise_list or sunset_list:

@@ -376,6 +376,7 @@ def analyse_longkeogram(
     output_prefix=None,
     expected_mode="auto",
     sections = [],
+    test_mode = False,
 ):
     image_path = Path(image_path)
 
@@ -444,7 +445,12 @@ def analyse_longkeogram(
         timezone_name=timezone_name,
         sunrise_list=sunrise_list,
         sunset_list=sunset_list,
+        test_mode=test_mode,
     )
+
+    if test_mode:
+        plt.show()
+        return
 
     for section in sections:
         y0 = section[0]
@@ -481,7 +487,7 @@ def analyse_longkeogram(
             sunset_list=sunset_list,
         )
 
-def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list):
+def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list, test_mode = False):
     image_path = Path(img_path)
 
     print(y0, y1)
@@ -533,32 +539,32 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
 
         draw_img = Image.alpha_composite(draw_img, overlay)
 
-
-    with output_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "timestamp",
-            "brightness_sum",
-            "brightness_mean",
-            "red_sum",
-            "green_sum",
-            "blue_sum",
-            "red_mean",
-            "green_mean",
-            "blue_mean",
-        ])
-        for ts, bsum, bmean, r_s, g_s, b_s, r_m, g_m, b_m in zip(timestamps, brightness_sum, brightness_mean, r_sum, g_sum, b_sum, r_mean, g_mean, b_mean):
+    if not test_mode:
+        with output_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
             writer.writerow([
-                ts.isoformat(sep=" "),
-                float(bsum),
-                float(bmean),
-                float(r_s),
-                float(g_s),
-                float(b_s),
-                float(r_m),  
-                float(g_m),
-                float(b_m),
+                "timestamp",
+                "brightness_sum",
+                "brightness_mean",
+                "red_sum",
+                "green_sum",
+                "blue_sum",
+                "red_mean",
+                "green_mean",
+                "blue_mean",
             ])
+            for ts, bsum, bmean, r_s, g_s, b_s, r_m, g_m, b_m in zip(timestamps, brightness_sum, brightness_mean, r_sum, g_sum, b_sum, r_mean, g_mean, b_mean):
+                writer.writerow([
+                    ts.isoformat(sep=" "),
+                    float(bsum),
+                    float(bmean),
+                    float(r_s),
+                    float(g_s),
+                    float(b_s),
+                    float(r_m),  
+                    float(g_m),
+                    float(b_m),
+                ])
 
     x_num = mdates.date2num(timestamps)
     x_min = x_num[0]
@@ -699,8 +705,10 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
 
     plt.suptitle("LongKeogram-Auswertung", fontsize=14)
     plt.tight_layout()
-    plt.savefig(output_plot, dpi=160)
-    plt.close(fig)
+    
+    if not test_mode:
+        plt.savefig(output_plot, dpi=160)
+        plt.close(fig)
 
     print("Bildgröße: {} x {} px".format(width, height))
     print("Startzeit: {}".format(timestamps[0]))
@@ -774,6 +782,7 @@ def main():
     parser.add_argument("--start", default="2026-05-21 00:00:00", help="Startzeitpunkt des untersuchten Intervalls, Default: 2026-05-01 00:00:00")
     parser.add_argument("--end", default="2026-05-29 00:00:00", help="Endzeitpunkt des untersuchten Intervalls, Default: 2026-05-29 00:00:00")
     parser.add_argument("--meta", default="meta.jsonl", help="Metadata, for retrieving missing Lines")
+    parser.add_argument('--test', action='store_true', help="Enable testing mode")
     args = parser.parse_args()
 
     analyse_longkeogram(
@@ -790,6 +799,7 @@ def main():
         output_prefix=args.output_prefix,
         expected_mode=args.expected_mode,
         sections = args.section,
+        test_mode=args.test,
     )
 
 

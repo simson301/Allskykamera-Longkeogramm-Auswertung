@@ -530,14 +530,7 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     draw_img = img.convert("RGBA")
     # Transparente Overlay-Ebene erstellen
     if overlay:
-        overlay = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        draw.rectangle(
-            [(0, y0), (width, y1)],
-            fill=(255, 0, 0, 80)  # Rot mit leichter Transparenz
-        )
-
-        draw_img = Image.alpha_composite(draw_img, overlay)
+        draw_img = draw_img.crop(0, y0, width, y1)
 
     if not test_mode:
         with output_csv.open("w", newline="", encoding="utf-8") as f:

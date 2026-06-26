@@ -362,6 +362,53 @@ def average_adjacent_distance_per_interval(values, timestamps, interval):
 
     return interval_starts, averages
 
+def average_adjacent_distance_per_dataline(luminance):
+    distances = np.abs(np.diff(luminance))
+    return distances
+
+
+class Section:
+    
+    def __init__(self, args, color, height):
+        self.save = False
+        self.logging = False 
+        self.show = False
+        
+        if "save" in args: self.save = True
+        if "log" in args: self.logging = True
+        if "show" in args: self.show = True
+
+        y0 = int(args[0])
+        y1 = int(args[1])
+        if y1 > height:
+            y1 = height
+        elif y1 <= 0:
+            y1 = height
+        elif y1 == -1:
+            y1 = height
+        if y0 > height:
+            y0 = 0
+        elif y0 < 0:
+            y0 = 0
+        if y0 > y1:
+            y0, y1 = y1, y0
+
+        self.y0 = y0
+        self.y1 = y1
+        self.color = color
+
+    def generate_sections(sectionargs, height):
+        colors = [(255,0,0,100),(0,255,0,100),(0,0,255,100), (255,160,0,100), (255,0,255,100), (255,255,0,100), (0,255,255,100)]
+        sections = []
+        for section in sectionargs:
+            color = colors[0]
+            colors.remove(color)
+            sections.append(Section(section, color, height))
+        
+        return sections
+
+
+
 def analyse_longkeogram(
     image_path,
     meta_path,
@@ -376,7 +423,7 @@ def analyse_longkeogram(
     output_prefix=None,
     expected_mode="auto",
     sections = [],
-    test_mode = False,
+    overview = [12345],
 ):
     image_path = Path(image_path)
 
@@ -397,17 +444,17 @@ def analyse_longkeogram(
     width, height = img.size
 
     img = img.crop((start_row, 0, end_row, height))
+
     width, height = img.size
     rgb_display = np.asarray(img, dtype=np.uint8)
     rgb_float = rgb_display.astype(np.float32)
 
-    
     timestamps = [
         start_time + timedelta(minutes=i * interval_minutes)
         for i in range(width)
     ]
 
-    #end_time = timestamps[-1]
+    sections = Section.generate_sections(sections, height)
 
     line_stats = calc_month_line_stats(
         start_time=start_time,
@@ -428,49 +475,12 @@ def analyse_longkeogram(
             timezone_name=timezone_name,
         )
 
-    plot_long_keogram_analasys(
-        y0=0,
-        y1=height,
-        img=img,
-        overlay=False,
-        rgb_float=rgb_float,
-        img_path=image_path,
-        output_dir=output_dir,
-        output_prefix=output_prefix,
-        timestamps=timestamps,
-        interval_minutes=interval_minutes,
-        line_stats=line_stats,
-        latitude=latitude,
-        longitude=longitude,
-        timezone_name=timezone_name,
-        sunrise_list=sunrise_list,
-        sunset_list=sunset_list,
-        test_mode=test_mode,
-    )
-
-    if test_mode:
-        plt.show()
-        return
-
-    for section in sections:
-        y0 = section[0]
-        y1 = section[1]
-        if y1 > height:
-            y1 = height
-        elif y1 <= 0:
-            y1 = height
-        elif y1 == -1:
-            y1 = height
-        if y0 > height:
-            y0 = 0
-        elif y0 < 0:
-            y0 = 0
-        if y0 > y1:
-            y0, y1 = y1, y0
-        
+    if not overview == [12345]:
+        print(overview)
+        args = [-1,-1]+overview
+        print(args)
         plot_long_keogram_analasys(
-            y0=y0,
-            y1=y1,
+            section=Section(args, (0,0,0,0), height),
             img=img,
             overlay=True,
             rgb_float=rgb_float,
@@ -485,11 +495,32 @@ def analyse_longkeogram(
             timezone_name=timezone_name,
             sunrise_list=sunrise_list,
             sunset_list=sunset_list,
+            sections=sections
         )
 
-def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list, test_mode = False):
+    for section in sections:  
+        plot_long_keogram_analasys(
+            section=section,
+            img=img,
+            overlay=False,
+            rgb_float=rgb_float,
+            img_path=image_path,
+            output_dir=output_dir,
+            output_prefix=output_prefix,
+            timestamps=timestamps,
+            interval_minutes=interval_minutes,
+            line_stats=line_stats,
+            latitude=latitude,
+            longitude=longitude,
+            timezone_name=timezone_name,
+            sunrise_list=sunrise_list,
+            sunset_list=sunset_list,
+        )
+
+def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list, test_mode = False, sections = []):
     image_path = Path(img_path)
 
+    y0, y1 = section.y0, section.y1
     print(y0, y1)
 
     if not image_path.exists():
@@ -530,9 +561,20 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     draw_img = img.convert("RGBA")
     # Transparente Overlay-Ebene erstellen
     if overlay:
-        draw_img = draw_img.crop(0, y0, width, y1)
+        overlay = Image.new("RGBA", draw_img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        for sect in sections:
+            draw.rectangle(
+                [(0, sect.y0), (width, sect.y1)],
+                fill=sect.color  # Rot mit leichter Transparenz
+            )
+        draw_img = Image.alpha_composite(draw_img, overlay)
+    else:
+        print(0, y0, width, y1)
+        draw_img = draw_img.crop((0, y0, width, y1))
 
-    if not test_mode:
+    if section.logging:
+        print("writing csv")
         with output_csv.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -699,8 +741,14 @@ def plot_long_keogram_analasys(y0, y1, img, overlay, rgb_float, img_path, output
     plt.suptitle("LongKeogram-Auswertung", fontsize=14)
     plt.tight_layout()
     
-    if not test_mode:
+    if section.save:
         plt.savefig(output_plot, dpi=160)
+
+    if section.show:
+        print("Diagramm anzeigen? (j/n)")
+        plt.show()   
+
+    else:
         plt.close(fig)
 
     print("Bildgröße: {} x {} px".format(width, height))
@@ -764,18 +812,20 @@ def main():
     parser.add_argument("--output-prefix", default=None, help="Optionaler Prefix für CSV und PNG")
     parser.add_argument("--output-dir", default="Output_Selectable_Sections/", help="Output-Verzeichnis, Default: Output_Selectable_Sections/")
     parser.add_argument(
-    "--section",
-    nargs=2,
-    type=int,
-    action="append",
-    metavar=("X", "Y"),
-    default=[],
-    help="Analyse der Daten nur in der angegebenen Y-section",
+        "--section",
+        nargs='+',
+        action="append",
+        default=[],
+        help="Analyse der Daten nur in der angegebenen Y-section",
     )
     parser.add_argument("--start", default="2026-05-21 00:00:00", help="Startzeitpunkt des untersuchten Intervalls, Default: 2026-05-01 00:00:00")
     parser.add_argument("--end", default="2026-05-29 00:00:00", help="Endzeitpunkt des untersuchten Intervalls, Default: 2026-05-29 00:00:00")
     parser.add_argument("--meta", default="meta.jsonl", help="Metadata, for retrieving missing Lines")
-    parser.add_argument('--test', action='store_true', help="Enable testing mode")
+    parser.add_argument(
+        '--overview', 
+        nargs='+',
+        default=[], help="Enable the overview"
+    )
     args = parser.parse_args()
 
     analyse_longkeogram(
@@ -792,7 +842,7 @@ def main():
         output_prefix=args.output_prefix,
         expected_mode=args.expected_mode,
         sections = args.section,
-        test_mode=args.test,
+        overview=args.overview,
     )
 
 

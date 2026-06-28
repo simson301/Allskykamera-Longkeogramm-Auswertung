@@ -50,6 +50,7 @@ import matplotlib.dates as mdates
 from astral import LocationInfo
 from astral.sun import sun
 import json
+import pandas as pnd
 
 
 def parse_start_time(value):
@@ -362,8 +363,12 @@ def average_adjacent_distance_per_interval(values, timestamps, interval):
 
     return interval_starts, averages
 
-def average_adjacent_distance_per_dataline(luminance):
-    distances = np.abs(np.diff(luminance))
+def average_adjacent_distance_per_dataline(luminance, fill_value=0):
+    distances = np.abs(np.diff(luminance, axis=1))
+    distances = np.concatenate(
+        [distances, np.full((distances.shape[0], 1), fill_value)],
+        axis=1
+    )
     return distances
 
 
@@ -397,13 +402,26 @@ class Section:
         self.y1 = y1
         self.color = color
 
+        self.data = pnd.DataFrame(
+            columns=[
+                "Timestamp", 
+                "Brightness-Sum", "Brightness-Mean",
+                "Red-Sum", "Red-Mean",
+                "Blue-Sum", "Blue-Mean",
+                "Green-Sum", "Green-Mean",
+                "Adjacent-Distance-Sum", "Adjacent-Distance-Mean"
+            ]
+        )
+        self.data.rename_axis("Row", inplace=True)
+
     def generate_sections(sectionargs, height):
         colors = [(255,0,0,100),(0,255,0,100),(0,0,255,100), (255,160,0,100), (255,0,255,100), (255,255,0,100), (0,255,255,100)]
         sections = []
         for section in sectionargs:
-            color = colors[0]
-            colors.remove(color)
-            sections.append(Section(section, color, height))
+            if "save" in section or "log" in section or "show" in section: # Filter out unused Section Arguments
+                color = colors[0]
+                colors.remove(color)
+                sections.append(Section(section, color, height))
         
         return sections
 
@@ -547,6 +565,11 @@ def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, outpu
         + 0.0722 * rgb_float[y0:y1, :, 2]
     )
 
+    adjacent_distances = average_adjacent_distance_per_dataline(luminance)
+
+    adjacent_distances_mean = adjacent_distances.mean(axis=0)
+    adjacent_distances_sum = adjacent_distances.sum(axis=0)
+
     brightness_sum = luminance.sum(axis=0)
     brightness_mean = luminance.mean(axis=0)
     
@@ -574,32 +597,19 @@ def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, outpu
         draw_img = draw_img.crop((0, y0, width, y1))
 
     if section.logging:
-        print("writing csv")
-        with output_csv.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                "timestamp",
-                "brightness_sum",
-                "brightness_mean",
-                "red_sum",
-                "green_sum",
-                "blue_sum",
-                "red_mean",
-                "green_mean",
-                "blue_mean",
-            ])
-            for ts, bsum, bmean, r_s, g_s, b_s, r_m, g_m, b_m in zip(timestamps, brightness_sum, brightness_mean, r_sum, g_sum, b_sum, r_mean, g_mean, b_mean):
-                writer.writerow([
-                    ts.isoformat(sep=" "),
-                    float(bsum),
-                    float(bmean),
-                    float(r_s),
-                    float(g_s),
-                    float(b_s),
-                    float(r_m),  
-                    float(g_m),
-                    float(b_m),
-                ])
+        section.data["Timestamp"] = timestamps
+        section.data["Brightness-Sum"] = brightness_sum
+        section.data["Brightness-Mean"] = brightness_mean
+        section.data["Red-Sum"] = r_sum
+        section.data["Green-Sum"] = g_sum
+        section.data["Blue-Sum"] = b_sum
+        section.data["Red-Mean"] = r_mean
+        section.data["Green-Mean"] = g_mean
+        section.data["Blue-Mean"] = b_mean
+        section.data["Adjacent-Distance-Sum"] = adjacent_distances_sum
+        section.data["Adjacent-Distance-Mean"] = adjacent_distances_mean
+
+        section.data.to_csv(output_csv, index=False)
 
     x_num = mdates.date2num(timestamps)
     x_min = x_num[0]
@@ -707,6 +717,7 @@ def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, outpu
     ax5.set_title("Helligkeitssumen Nachbarabstand pro vertikaler Linie")
     ax5.grid(True, alpha=0.3)
     """
+
     time, average_distances = average_adjacent_distance_per_interval(brightness_sum, timestamps, timedelta(days=1))
     ax5.plot(time, average_distances, label="Nachbarabstand")
     ax5.set_ylabel("Abstand")

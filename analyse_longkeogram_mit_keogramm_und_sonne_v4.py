@@ -493,11 +493,12 @@ def analyse_longkeogram(
             timezone_name=timezone_name,
         )
 
+    processed_sections = []
+
     if not overview == [12345]:
-        print(overview)
         args = [-1,-1]+overview
-        print(args)
-        plot_long_keogram_analasys(
+        processed_sections.append(
+            plot_long_keogram_analasys(
             section=Section(args, (0,0,0,0), height),
             img=img,
             overlay=True,
@@ -514,10 +515,12 @@ def analyse_longkeogram(
             sunrise_list=sunrise_list,
             sunset_list=sunset_list,
             sections=sections
+            )
         )
 
     for section in sections:  
-        plot_long_keogram_analasys(
+        processed_sections.append(
+            plot_long_keogram_analasys(
             section=section,
             img=img,
             overlay=False,
@@ -533,7 +536,10 @@ def analyse_longkeogram(
             timezone_name=timezone_name,
             sunrise_list=sunrise_list,
             sunset_list=sunset_list,
+            )
         )
+
+        return processed_sections
 
 def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, output_dir, output_prefix, timestamps, interval_minutes, line_stats, latitude, longitude, timezone_name, sunrise_list, sunset_list, test_mode = False, sections = []):
     image_path = Path(img_path)
@@ -802,6 +808,8 @@ def plot_long_keogram_analasys(section, img, overlay, rgb_float, img_path, outpu
         print("Sonnenuntergänge im Bereich: {}".format(len(sunset_list)))
     else:
         print("Hinweis: Keine Sonnenauf-/untergänge berechnet, da --lat und --lon fehlen.")
+
+    return section
 
 
 def main():
